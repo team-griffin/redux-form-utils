@@ -4,7 +4,7 @@ import dot from 'dot-object';
 
 const convertSingle = (err) => {
   const flatten = {
-    [err.path]: err.message,
+    [err.path]: [ err.message ],
   };
   const unflattened = dot.object(flatten);
 
@@ -15,22 +15,36 @@ const convertMultiBase = (err) => {
   return reduce(err.inner, (result, value) => {
     const inners = convertMultiBase(value);
 
-    return {
+    return [
       ...result,
-      [value.path]: value.message,
-      ...(inners) ? inners : {
+      {
+        path: value.path,
+        message: value.message,
       },
-    };
+      ...(inners) ? inners : [],
+    ];
   }, {
   });
 };
 
 const convertMulti = (err) => {
   const flatten = convertMultiBase(err);
-  const unflattened = dot.object(flatten);
+  const grouped = reduce(flatten, (result, value) => {
+    if(result[value.path] == null) {
+      return {
+        ...result,
+        [value.path]: [value.message],
+      };
+    }
+    result[value.path].push(value.message);
+
+    return result;
+  }, {});
+  const unflattened = dot.object(grouped);
 
   return new SubmissionError(unflattened);
 };
+
 
 const convertYupError = (err) => {
   return (err.path == null) ? convertMulti(err) : convertSingle(err);
